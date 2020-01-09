@@ -1,0 +1,182 @@
+<!doctype html>
+<html class="no-js" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Dynamic Kriging Map</title>
+    <meta name="description" content="">
+    <meta name="author" content="Mathias Leroy">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+    <!-- <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.css"> -->
+	<link rel="stylesheet" href="assets/css/ol.css">     
+
+    <script src="http://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.js"></script> -->
+	   <script src="assets/js/ol.js"></script>
+    <script src="assets/js/kriging-original.js"></script>
+    <script src="assets/js/rainbowvis.js"></script>    
+    <script src="interpolation.js"></script>
+    <script src="testData.js"></script>
+    <script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
+
+</head>
+<style>
+    .container {
+    width: 100% !important;
+    }
+</style>
+<body>   
+    <div class="container">
+        <div class='col-md-4'>            
+                <label  for='inputCenter'>Center Point ( Ex: -54.423, -23.431) </label>
+                <input class="form-control" type="text" id='inputCenter'/>
+            
+            
+                <label  for='inputFeatures'> Features Json Array ( Ex: [{LonLat:[-54.424, -23.121],Value:5}])</label>
+                <input class="form-control" type="text" id='inputFeatures'/>
+            
+            
+                <label for='inputBoundary' >Boundary Points Array ( Ex: [[2.545429, 51.089067],[2.758894, 51.164847],[3.075267, 51.301174] ])</label>
+                <input class="form-control" type="text" id='inputBoundary'/>
+                
+                <button onclick="sample1()" id="btnsample1">Sample 1</button>
+                <button onclick="sample2()" id="btnsample2">Sample 2</button>
+                <button onclick="execute()" id="btnexecute">Execute</button>
+                <button onclick="downloadAsImage()">Download</button>
+            <div id="areaContent"></div>
+        </div>
+        <div class="col-md-8" style="height: 600px;" id='divContent'>
+        </div>
+        
+    </div>
+    
+    <script>
+            var testeFeatures = getTestFeatures();  
+            var colRanges =["#ff0000","#ff8000","#ffbb77","#ffff80","#8ed38e","#008e0b","#004a03"];  
+            var mapOL;
+
+            this.createMapDiv = function(){
+                var mapDiv = document.createElement("div");
+                mapDiv.setAttribute("id", "mapInvisibleDiv");
+
+                var divHeight ="100%";
+                var divWidth = "100%";
+                    //todo: mudar display para none ao incorpar
+                    mapDiv.setAttribute("style", "top: 0px; left:0px;width:"+divWidth+";height:"+divHeight+";display:block;z-index:9999;position:absolute;"),      
+                    document.getElementById('divContent').appendChild(mapDiv);
+               
+            };
+            function execute(){
+                var center = JSON.parse(document.getElementById("inputCenter").value); 
+                var features = JSON.parse(document.getElementById("inputFeatures").value); 
+                var boundary = JSON.parse(document.getElementById("inputBoundary").value); 
+               /* if(document.getElementById("mapInvisibleDiv"))
+                    document.getElementById("mapInvisibleDiv").remove();*/
+
+               var canvasWidth= document.querySelector("#mapInvisibleDiv").clientWidth;
+               var canvasHeight= document.querySelector("#mapInvisibleDiv").clientHeight
+                var interpolation = new Interpolation(features,boundary, colRanges, mapOL , canvasWidth,canvasHeight, 'divContent'); 
+                interpolation.initMap(
+                    function(areas){
+                        var areasContent = ""; 
+                        for(var i =0;i<areas.areas.length;i++){
+                            areasContent+= "Valor: "+areas.areas[i].value +" Área: "+areas.areas[i].area +" </br>";
+                        }
+
+                        document.getElementById("areaContent").innerHTML = areasContent;
+                        //document.body.appendChild(canvas);
+                    });                
+            }
+
+            function sample1(){ 
+                document.getElementById("inputCenter").value = JSON.stringify(talhao_center);
+                document.getElementById("inputFeatures").value= JSON.stringify(talhao_points);
+                document.getElementById("inputBoundary").value = JSON.stringify(talhao_cords);                
+                colRanges =["#ff0000","#ff8000","#ffbb77","#ffff80","#8ed38e","#008e0b","#004a03"];  
+            }
+            
+            function sample2(){
+
+                document.getElementById("inputCenter").value = JSON.stringify(testeCenter);
+                document.getElementById("inputFeatures").value= JSON.stringify(testeFeatures);
+                document.getElementById("inputBoundary").value = JSON.stringify(testBoundary);                
+                colRanges = ["#006837", "#1a9850", "#66bd63", "#a6d96a", "#d9ef8b", "#ffffbf", "#fee08b", "#fdae61", "#f46d43", "#d73027", "#a50026"];                
+            }
+
+            function init(){
+                createMapDiv();
+                var basemapSource = new ol.source.BingMaps({
+                    key: 'Aiw4o03XUnHchL9fFe5mi-JuBmqzULGPBNv07DX7od8OTv9TaFdpAcPn1Rpub95q',
+                    imagerySet: "Aerial"
+                });
+                var basemapLayer = new ol.layer.Tile({
+                    source: basemapSource
+                });
+
+                mapOL = new ol.Map({
+                    target: "mapInvisibleDiv",
+                    layers: [ basemapLayer ],
+                    view: new ol.View({
+                        center: ol.proj.fromLonLat(talhao_center),
+                        zoom: 16
+                    })
+                });
+            }
+            function downloadAsImage(){
+/*
+                var canvasLayer = new ol.layer.Image({
+                source: new ol.source.ImageCanvas({
+                    canvasFunction: function (extent, resolution, pixelRatio, size, projection) {       
+                        return (document.getElementById('krigingCanvas');
+                    },
+                    projection: 'EPSG:3857'
+                })
+                });
+                mapOL.addLayer(canvasLayer);
+                
+                mapOL.once('postcompose', function(event) {
+                    var dataURL;
+                    var canvas = event.context.canvas;
+                    if (ol.has.DEVICE_PIXEL_RATIO == 1) {
+                        dataURL = canvas.toDataURL('image/png');
+                    } else {
+                        var targetCanvas = document.createElement('canvas');
+                        var size = mapOL.getSize();
+                        targetCanvas.width = size[0];
+                        targetCanvas.height = size[1];
+                        targetCanvas.getContext('2d').drawImage(canvas,
+                            0, 0, canvas.width, canvas.height,
+                            0, 0, targetCanvas.width, targetCanvas.height);
+                        dataURL = targetCanvas.toDataURL('image/png');
+                       
+                    }
+                    download(dataURL,"mapa.png");
+                    });
+                    mapOL.renderSync();*/
+
+
+                html2canvas(document.querySelector("#mapInvisibleDiv")).then(canvas => {
+                    var mapImg = canvas.toDataURL('image/png');
+                    var a = document.createElement("a");
+                    a.href = mapImg;
+                    a.setAttribute("download", "MAPA.png");
+                    a.click();
+                });
+      
+            }
+
+            
+            function download(dataurl, filename) {
+                var a = document.createElement("a");
+                a.href = dataurl;
+                a.setAttribute("download", filename);
+                a.click();
+            }
+            init();    
+            sample1();
+            //execute();
+    </script>
+</body>    
